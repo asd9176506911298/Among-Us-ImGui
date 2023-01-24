@@ -44,6 +44,8 @@ static int randomColorId{};
 
 static int randomAngle = 0;
 
+int NumImpostorsS = 1;
+
 float circleRadius = 1;
 
 bool showMenu = true;
@@ -53,11 +55,70 @@ bool circleRing = false;
 bool random4 = false;
 bool ModifyLight = false;
 bool ModifySpeed = false;
+bool ventMove = false;
+bool EndGame = false;
+bool impostorsAmount = false;
+bool soloGame = false;
+
 float LightModifier = 1;
 float SpeedModifier = 1;
 
+void dHatManager_GetUnlockedPets(HatManager* __this, MethodInfo* method)
+{
+    std::cout << "HatManager_GetUnlockedPets" << std::endl;
+    std::cout << HatManager_GetUnlockedPets(__this, method) << std::endl;
+
+    //return HatManager_GetUnlockedPets(__this, method);
+}
+
+int dStatsManager_get_BanMinutesLeft(StatsManager* __this, MethodInfo* method)
+{
+    return 0;
+}
+
+int dGameOptionsData_GetAdjustedNumImpostors(GameOptionsData* __this, int32_t playerCount, MethodInfo* method)
+{
+    if(impostorsAmount)
+        return NumImpostorsS;
+
+    GameOptionsData_GetAdjustedNumImpostors(__this, playerCount, method);
+}
+
+void dInnerNetServer_EndGame(InnerNetServer* __this, MessageReader* message, InnerNetServer_Player* source, MethodInfo* method)
+{
+    if (!EndGame)
+        return InnerNetServer_EndGame(__this, message, source, method);
+}
+
+void dGameOptionsData_Serialize(GameOptionsData* __this, BinaryWriter* writer, uint8_t version, MethodInfo* method)
+{
+    __this->fields.KillCooldown = 0;
+    __this->fields.NumImpostors = 4;
+
+    GameOptionsData_Serialize(__this, writer, version, method);
+}
+
+void dGameStartManager_Update(GameStartManager* __this, MethodInfo* method)
+{
+    if(soloGame)
+        __this->fields.MinPlayers = 1;
+
+    GameStartManager_Update(__this, method);
+}
+
+IEnumerator* dPlayerPhysics_WalkPlayerTo(PlayerPhysics* __this, Vector2 worldPos, float tolerance, MethodInfo* method)
+{
+    tolerance = 9999;
+    return PlayerPhysics_WalkPlayerTo(__this, worldPos, tolerance, method);
+}
+
 void dKeyboardJoystick_HandleHud(MethodInfo* method)
 {
+    auto LocalPlayer = (*PlayerControl__TypeInfo)->static_fields->LocalPlayer;
+    auto LocalPlayerPos = LocalPlayer->fields.NetTransform->fields.prevPosSent;
+    auto GameOptionsData = (*PlayerControl__TypeInfo)->static_fields->GameOptions;
+    //std::cout << GameOptionsData << std::endl;
+
     if (noclip)
     {
         auto comp = Component_get_gameObject((Component*)(*PlayerControl__TypeInfo)->static_fields->LocalPlayer, NULL);
@@ -67,6 +128,14 @@ void dKeyboardJoystick_HandleHud(MethodInfo* method)
     {
         auto comp = Component_get_gameObject((Component*)(*PlayerControl__TypeInfo)->static_fields->LocalPlayer, NULL);
         GameObject_set_layer(comp, LayerMask_NameToLayer(CreateNETStringFromANSI("Players"), NULL), NULL);
+    }
+
+    if (teleport && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+    {
+        Vector3 mousePos = Input_get_mousePosition(NULL);
+        auto mainCamera = Camera_get_main(NULL);
+        Vector3 mouseVec3 = Camera_ScreenToWorldPoint_1((app::Camera*)mainCamera, mousePos, NULL);
+        CustomNetworkTransform_SnapTo(LocalPlayer->fields.NetTransform, { mouseVec3.x, mouseVec3.y }, NULL);
     }
 
     if (ModifyLight)
@@ -89,12 +158,18 @@ void dKeyboardJoystick_HandleHud(MethodInfo* method)
         (*PlayerControl__TypeInfo)->static_fields->GameOptions->fields.PlayerSpeedMod = 1;
     }
 
-    auto LocalPlayer = (*PlayerControl__TypeInfo)->static_fields->LocalPlayer;
-    auto LocalPlayerPos = LocalPlayer->fields.NetTransform->fields.prevPosSent;
     for (auto player : GetAllPlayers())
     {
         if(player != LocalPlayer)
         {
+            if (circleRing)
+            {
+                randomAngle = rand() % 360;
+                float circle_y = sin(randomAngle * PI / 180) * circleRadius;
+                float circle_x = cos(randomAngle * PI / 180) * circleRadius;
+                CustomNetworkTransform_SnapTo(player->fields.NetTransform, { LocalPlayerPos.x + circle_x, LocalPlayerPos.y + circle_y }, NULL);
+            }
+
             if(random4)
             {
                 randomSkinId = rand() % 15;
@@ -107,24 +182,11 @@ void dKeyboardJoystick_HandleHud(MethodInfo* method)
                 PlayerControl_RpcSetPet(player, randomPetId, method);
                 PlayerControl_RpcSetColor(player, randomColorId, method);
             }
-        
-            if (circleRing)
-            {
-                randomAngle = rand() % 360;
-                float circle_y = sin(randomAngle * PI / 180) * circleRadius;
-                float circle_x = cos(randomAngle * PI / 180) * circleRadius;
-                CustomNetworkTransform_SnapTo(player->fields.NetTransform, { LocalPlayerPos.x + circle_x, LocalPlayerPos.y + circle_y }, NULL);
-            }            
         }
     }
 
-    if (teleport && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
-    {
-        Vector3 mousePos = Input_get_mousePosition(NULL);
-        auto mainCamera = Camera_get_main(NULL);
-        Vector3 mouseVec3 = Camera_ScreenToWorldPoint_1((app::Camera*)mainCamera, mousePos, NULL);
-        CustomNetworkTransform_SnapTo(LocalPlayer->fields.NetTransform, { mouseVec3.x, mouseVec3.y }, NULL);
-    }
+    if (ventMove)
+        (*PlayerControl__TypeInfo)->static_fields->LocalPlayer->fields.moveable = 1;
 
     KeyboardJoystick_HandleHud(method);
 }
@@ -177,14 +239,14 @@ HRESULT __stdcall dPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    ImGui::SetNextWindowSize(ImVec2(620, 200));
+    ImGui::SetNextWindowSize(ImVec2(620, 320));
 
     if(showMenu)
     {
         ImGui::Begin("Test", nullptr, ImGuiWindowFlags_NoSavedSettings);
         ImGui::Checkbox("Noclip", &noclip);
 
-        ImGui::Checkbox("Click Teleport", &teleport);
+        ImGui::Checkbox("RightClick Teleport", &teleport);
 
         ImGui::Checkbox("Light", &ModifyLight);
         ImGui::SameLine();
@@ -200,6 +262,23 @@ HRESULT __stdcall dPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
 
         ImGui::Checkbox("Random4", &random4);
 
+        ImGui::Checkbox("ventMove", &ventMove);
+
+        if (ImGui::Button("EnterVent"))
+        {
+            PlayerPhysics_RpcEnterVent((*PlayerControl__TypeInfo)->static_fields->LocalPlayer->fields.MyPhysics, 0, NULL);
+        }
+
+        if (ImGui::Button("ExitVent"))
+        {
+            PlayerPhysics_RpcExitVent((*PlayerControl__TypeInfo)->static_fields->LocalPlayer->fields.MyPhysics, 0, NULL);
+        }
+        ImGui::Checkbox("soloGame", &soloGame);
+        ImGui::Checkbox("Adjust Impostors amount", &impostorsAmount);
+        ImGui::SameLine();
+        ImGui::SliderInt("##NumImpostorsS", &NumImpostorsS, 1, 10);
+
+        ImGui::Checkbox("Prevent EndGame", &EndGame);
 
         ImGui::End();
     }
@@ -266,6 +345,15 @@ void Run()
 
     DetourAttach((LPVOID*)&oPresent, dPresent);
     DetourAttach((LPVOID*)&KeyboardJoystick_HandleHud, dKeyboardJoystick_HandleHud);
+    DetourAttach((LPVOID*)&PlayerPhysics_WalkPlayerTo, dPlayerPhysics_WalkPlayerTo);
+    DetourAttach((LPVOID*)&GameStartManager_Update, dGameStartManager_Update);
+    DetourAttach((LPVOID*)&GameOptionsData_Serialize, dGameOptionsData_Serialize);
+    DetourAttach((LPVOID*)&InnerNetServer_EndGame, dInnerNetServer_EndGame);
+    DetourAttach((LPVOID*)&GameOptionsData_GetAdjustedNumImpostors, dGameOptionsData_GetAdjustedNumImpostors);
+    DetourAttach((LPVOID*)&StatsManager_get_BanMinutesLeft, dStatsManager_get_BanMinutesLeft);
+    DetourAttach((LPVOID*)&HatManager_GetUnlockedPets, dHatManager_GetUnlockedPets);
+    
+    
 
     DetourTransactionCommit();
 }
