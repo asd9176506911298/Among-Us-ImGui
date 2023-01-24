@@ -8,6 +8,7 @@
 #include <iostream>
 #include "il2cpp-appdata.h"
 
+#include "GameUtility.h"
 
 #include "imgui\imgui.h"
 #include "imgui\imgui_impl_dx11.h"
@@ -24,6 +25,7 @@ static ID3D11DeviceContext* g_pd3dDeviceContext = NULL;
 static IDXGISwapChain* g_pSwapChain = NULL;
 static ID3D11RenderTargetView* g_mainRenderTargetView = NULL;
 
+#define PI 3.14159265359
 
 using namespace app;
 
@@ -35,13 +37,26 @@ String* CreateNETStringFromANSI(const char* string)
 // Set the name of your log file here
 extern const LPCWSTR LOG_FILE = L"il2cpp-log.txt";
 
+static int randomSkinId{};
+static int randomHatId{};
+static int randomPetId{};
+static int randomColorId{};
+
+static int randomAngle = 0;
+
+float circleRadius = 1;
+
 bool showMenu = true;
 bool noclip = false;
+bool teleport = false;
+bool circleRing = false;
+bool random4 = false;
 bool ModifyLight = false;
 bool ModifySpeed = false;
 float LightModifier = 1;
 float SpeedModifier = 1;
-void dPlayerControl_FixedUpdate(PlayerControl* __this, MethodInfo* method)
+
+void dKeyboardJoystick_HandleHud(MethodInfo* method)
 {
     if (noclip)
     {
@@ -74,8 +89,45 @@ void dPlayerControl_FixedUpdate(PlayerControl* __this, MethodInfo* method)
         (*PlayerControl__TypeInfo)->static_fields->GameOptions->fields.PlayerSpeedMod = 1;
     }
 
+    auto LocalPlayer = (*PlayerControl__TypeInfo)->static_fields->LocalPlayer;
+    auto LocalPlayerPos = LocalPlayer->fields.NetTransform->fields.prevPosSent;
+    for (auto player : GetAllPlayers())
+    {
+        if(player != LocalPlayer)
+        {
+            if(random4)
+            {
+                randomSkinId = rand() % 15;
+                randomHatId = rand() % 93;
+                randomPetId = rand() % 10;
+                randomColorId = rand() % 12;
 
-    PlayerControl_FixedUpdate(__this, method);
+                PlayerControl_RpcSetSkin(player, randomSkinId, method);
+                PlayerControl_RpcSetHat(player, randomHatId, method);
+                PlayerControl_RpcSetPet(player, randomPetId, method);
+                PlayerControl_RpcSetColor(player, randomColorId, method);
+            }
+        
+            if (circleRing)
+            {
+                randomAngle = rand() % 360;
+                float circle_y = sin(randomAngle * PI / 180) * circleRadius;
+                float circle_x = cos(randomAngle * PI / 180) * circleRadius;
+                CustomNetworkTransform_SnapTo(player->fields.NetTransform, { LocalPlayerPos.x + circle_x, LocalPlayerPos.y + circle_y }, NULL);
+            }            
+        }
+    }
+
+    if (teleport && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+    {
+        std::cout << "ImGuiMouseButton_Left" << std::endl;
+        Vector3 mousePos = Input_get_mousePosition(NULL);
+        auto mainCamera = Camera_get_main(NULL);
+        Vector3 mouseVec3 = Camera_ScreenToWorldPoint_1((app::Camera*)mainCamera, mousePos, NULL);
+        CustomNetworkTransform_SnapTo(LocalPlayer->fields.NetTransform, { mouseVec3.x, mouseVec3.y }, NULL);
+    }
+
+    KeyboardJoystick_HandleHud(method);
 }
 
 typedef HRESULT(__stdcall* Present)(IDXGISwapChain* This,UINT SyncInterval,UINT Flags);
@@ -92,7 +144,7 @@ LRESULT WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     if (GetAsyncKeyState(VK_INSERT) & 1)
         showMenu = !showMenu;
 
-    CallWindowProc(oWndProc, hWnd, msg, wParam, lParam);
+    return CallWindowProc(oWndProc, hWnd, msg, wParam, lParam);
 }
 
 bool init = false;
@@ -126,12 +178,14 @@ HRESULT __stdcall dPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    ImGui::SetWindowSize(ImVec2(520, 100));
+    ImGui::SetNextWindowSize(ImVec2(620, 200));
 
     if(showMenu)
     {
-        ImGui::Begin("Test");
+        ImGui::Begin("Test", nullptr, ImGuiWindowFlags_NoSavedSettings);
         ImGui::Checkbox("Noclip", &noclip);
+
+        ImGui::Checkbox("Click Teleport", &teleport);
 
         ImGui::Checkbox("Light", &ModifyLight);
         ImGui::SameLine();
@@ -140,6 +194,14 @@ HRESULT __stdcall dPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
         ImGui::Checkbox("Speed", &ModifySpeed);
         ImGui::SameLine();
         ImGui::SliderFloat("Speed Value", &SpeedModifier, 0, 5);
+
+        ImGui::Checkbox("CircleRing", &circleRing);
+        ImGui::SameLine();
+        ImGui::SliderFloat("Circle Radius", &circleRadius, 0.1, 3.5);
+
+        ImGui::Checkbox("Random4", &random4);
+
+
         ImGui::End();
     }
 
@@ -192,6 +254,9 @@ void Run()
 
     // If you would like to output to a new console window, use il2cppi_new_console() to open one and redirect stdout
     // il2cppi_new_console();
+    AllocConsole();
+    FILE* f;
+    freopen_s(&f, "CONOUT$", "w", stdout);
 
     // Place your custom code here
 
@@ -201,7 +266,7 @@ void Run()
     DetourUpdateThread(GetCurrentThread());
 
     DetourAttach((LPVOID*)&oPresent, dPresent);
-    DetourAttach((LPVOID*)&PlayerControl_FixedUpdate, dPlayerControl_FixedUpdate);
+    DetourAttach((LPVOID*)&KeyboardJoystick_HandleHud, dKeyboardJoystick_HandleHud);
 
     DetourTransactionCommit();
 }

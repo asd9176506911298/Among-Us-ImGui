@@ -34,6 +34,9 @@
     <ClCompile Include="imgui\imgui_impl_dx11.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
+    <ClCompile Include="GameUtility.cpp">
+      <Filter>user</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="user\main.h">
@@ -98,6 +101,9 @@
     </ClInclude>
     <ClInclude Include="detours\detours.h">
       <Filter>detours</Filter>
+    </ClInclude>
+    <ClInclude Include="GameUtility.h">
+      <Filter>user</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
