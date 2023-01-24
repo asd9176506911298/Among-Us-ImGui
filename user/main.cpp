@@ -118,9 +118,8 @@ void dKeyboardJoystick_HandleHud(MethodInfo* method)
         }
     }
 
-    if (teleport && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+    if (teleport && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
     {
-        std::cout << "ImGuiMouseButton_Left" << std::endl;
         Vector3 mousePos = Input_get_mousePosition(NULL);
         auto mainCamera = Camera_get_main(NULL);
         Vector3 mouseVec3 = Camera_ScreenToWorldPoint_1((app::Camera*)mainCamera, mousePos, NULL);
