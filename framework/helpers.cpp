@@ -47,4 +47,8 @@ std::string il2cppi_to_string(Il2CppString* str) {
 std::string il2cppi_to_string(app::String* str) {
     return il2cppi_to_string(reinterpret_cast<Il2CppString*>(str));
 }
+
+app::String* convert_to_string(std::string input) {
+    return (app::String*)il2cpp_string_new_len(input.data(), input.length());
+}
 #endif

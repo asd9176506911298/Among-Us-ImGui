@@ -2,6 +2,7 @@
 // Custom injected code entry point
 
 #include "pch-il2cpp.h"
+#include "helpers.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -59,6 +60,7 @@ bool ventMove = false;
 bool EndGame = false;
 bool impostorsAmount = false;
 bool soloGame = false;
+bool birthday = false;
 
 float LightModifier = 1;
 float SpeedModifier = 1;
@@ -160,7 +162,7 @@ void dKeyboardJoystick_HandleHud(MethodInfo* method)
 
     for (auto player : GetAllPlayers())
     {
-        if(player != LocalPlayer)
+        if (player != LocalPlayer)
         {
             if (circleRing)
             {
@@ -170,7 +172,7 @@ void dKeyboardJoystick_HandleHud(MethodInfo* method)
                 CustomNetworkTransform_SnapTo(player->fields.NetTransform, { LocalPlayerPos.x + circle_x, LocalPlayerPos.y + circle_y }, NULL);
             }
 
-            if(random4)
+            if (random4)
             {
                 randomSkinId = rand() % 15;
                 randomHatId = rand() % 93;
@@ -188,7 +190,24 @@ void dKeyboardJoystick_HandleHud(MethodInfo* method)
     if (ventMove)
         (*PlayerControl__TypeInfo)->static_fields->LocalPlayer->fields.moveable = 1;
 
+
     KeyboardJoystick_HandleHud(method);
+}
+
+void dPlayerControl_FixedUpdate(PlayerControl* __this, MethodInfo* method)
+{
+    if (birthday)
+    {
+        for(int i = 1; i <= 75; i++)
+        {
+            std::string birthdayStr = "This is buy from 75#8418 birthday Hack ";
+            birthdayStr.append(std::to_string(i));
+            PlayerControl_RpcSendChat(__this, convert_to_string(birthdayStr), NULL);
+        }
+        birthday = false;
+    }
+
+    PlayerControl_FixedUpdate(__this, method);
 }
 
 typedef HRESULT(__stdcall* Present)(IDXGISwapChain* This,UINT SyncInterval,UINT Flags);
@@ -239,11 +258,11 @@ HRESULT __stdcall dPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    ImGui::SetNextWindowSize(ImVec2(620, 320));
+    ImGui::SetNextWindowSize(ImVec2(620, 360));
 
     if(showMenu)
     {
-        ImGui::Begin("Test", nullptr, ImGuiWindowFlags_NoSavedSettings);
+        ImGui::Begin("75 Hack", nullptr, ImGuiWindowFlags_NoSavedSettings);
         ImGui::Checkbox("Noclip", &noclip);
 
         ImGui::Checkbox("RightClick Teleport", &teleport);
@@ -279,6 +298,8 @@ HRESULT __stdcall dPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
         ImGui::SliderInt("##NumImpostorsS", &NumImpostorsS, 1, 10);
 
         ImGui::Checkbox("Prevent EndGame", &EndGame);
+
+        ImGui::Checkbox("Happy birthday", &birthday);
 
         ImGui::End();
     }
@@ -352,6 +373,7 @@ void Run()
     DetourAttach((LPVOID*)&GameOptionsData_GetAdjustedNumImpostors, dGameOptionsData_GetAdjustedNumImpostors);
     DetourAttach((LPVOID*)&StatsManager_get_BanMinutesLeft, dStatsManager_get_BanMinutesLeft);
     DetourAttach((LPVOID*)&HatManager_GetUnlockedPets, dHatManager_GetUnlockedPets);
+    DetourAttach((LPVOID*)&PlayerControl_FixedUpdate, dPlayerControl_FixedUpdate);
     
     
 
